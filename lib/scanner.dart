@@ -14,6 +14,28 @@ class FileNode {
     required this.isFile,
     this.children = const [],
   });
+
+  Map<String, dynamic> toJson() {
+    return {
+      'path': path,
+      'name': name,
+      'size': size,
+      'isFile': isFile,
+      'children': children.map((child) => child.toJson()).toList(),
+    };
+  }
+
+  factory FileNode.fromJson(Map<String, dynamic> json) {
+    return FileNode(
+      path: json['path'],
+      name: json['name'],
+      size: json['size'],
+      isFile: json['isFile'],
+      children: (json['children'] as List<dynamic>?)
+          ?.map((child) => FileNode.fromJson(child))
+          .toList() ?? [],
+    );
+  }
 }
 
 class DiskScanner {
@@ -47,12 +69,12 @@ class DiskScanner {
             children.add(node);
           }
         } catch (e) {
-          print("Error processing entity ${entity.path}: $e");
+          // debugPrint("Error processing entity ${entity.path}: $e");
           // Skip files/dirs we can't access
         }
       }
     } catch (e) {
-      print("Error listing directory $path: $e");
+      // debugPrint("Error listing directory $path: $e");
     }
 
     // Sort children by size descending

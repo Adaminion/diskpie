@@ -1,0 +1,10 @@
+Analyzing diskpie...                                            
+
+warning - The value of the field '_liveRootNode' isn't used - lib\home_screen.dart:24:13 - unused_field
+  error - The name '_liveRootNode' is already defined - lib\home_screen.dart:24:13 - duplicate_definition
+warning - The value of the field '_snapshotRootNode' isn't used - lib\home_screen.dart:25:13 - unused_field
+  error - The name '_snapshotRootNode' is already defined - lib\home_screen.dart:25:13 - duplicate_definition
+warning - The value of the local variable 'uri' isn't used - lib\home_screen.dart:366:39 - unused_local_variable
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\home_screen.dart:398:53 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\home_screen.dart:499:70 - deprecated_member_use
+
