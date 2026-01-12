@@ -1,15 +1,19 @@
-import 'package:flutter/material.dart';
-import 'package:file_selector/file_selector.dart';
-import 'package:fl_chart/fl_chart.dart';
-import 'package:intl/intl.dart';
-import 'package:url_launcher/url_launcher.dart'; // For right-click 'open in explorer'
-import 'package:flutter/gestures.dart'; // For mouse events
+import 'dart:io';
 import 'dart:math';
 
-import 'scanner.dart';
+import 'package:file_selector/file_selector.dart';
+import 'package:fl_chart/fl_chart.dart';
+import 'package:flutter/gestures.dart'; // For mouse events
+import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import 'package:url_launcher/url_launcher.dart'; // For right-click 'open in explorer'
+
 import 'models/snapshot.dart';
-import 'services/snapshot_service.dart';
+import 'scanner.dart';
 import 'services/recent_scans_service.dart';
+import 'services/snapshot_service.dart';
+import 'services/disk_service.dart';
+import 'services/logger_service.dart';
 
 
 class HomeScreen extends StatefulWidget {
@@ -35,9 +39,13 @@ class _HomeScreenState extends State<HomeScreen> {
   String? _scanStatusMessage; // "Scanning complete took X minutes"
   
   final DiskScanner _scanner = DiskScanner();
+  final DiskService _diskService = DiskService();
+  final LoggerService _logger = LoggerService();
 
   final SnapshotService _snapshotService = SnapshotService();
   final RecentScansService _recentScansService = RecentScansService();
+
+  DiskUsage? _currentDiskUsage;
 
   List<String> _recentScans = [];
   List<Snapshot> _recentSnapshots = [];
@@ -57,7 +65,9 @@ class _HomeScreenState extends State<HomeScreen> {
     if (root == null) return [];
 
     final folders = root.children.where((c) => !c.isFile).toList();
-    final files = root.children.where((c) => c.isFile).toList();
+    final files = root.children.where((c) => c.isFile && !c.name.startsWith("Others")).toList();
+    final others = root.children.where((c) => c.isFile && c.name.startsWith("Others")).toList();
+    folders.addAll(others);
 
     if (files.isNotEmpty) {
       final totalFileSize = files.fold<int>(0, (sum, item) => sum + item.size);
@@ -102,6 +112,9 @@ class _HomeScreenState extends State<HomeScreen> {
       _refreshDashboardData();
 
       _scanTimer?.stop();
+
+      // Fetch Disk Usage
+      final usage = await _diskService.getDiskUsage(directoryPath);
       
       final elapsed = _scanTimer?.elapsed;
       String timeMsg = "";
@@ -116,18 +129,20 @@ class _HomeScreenState extends State<HomeScreen> {
       if (mounted) {
         setState(() {
           _liveRootNode = node;
+          _currentDiskUsage = usage;
           _scanStatusMessage = "Scanning complete! Took $timeMsg.";
         });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(_scanStatusMessage!)),
         );
       }
-    } catch (e) {
+      } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error scanning: $e')),
         );
       }
+      await _logger.logError("Error in _pickDirectory for path $directoryPath", e);
     } finally {
       if (mounted) {
         setState(() {
@@ -143,12 +158,23 @@ class _HomeScreenState extends State<HomeScreen> {
     final name = await _showInputDialog("Snapshot Name", "Enter a name/ID for this snapshot");
     if (name == null || name.isEmpty) return;
 
+    // Prune tree: Keep root and its immediate children (shallow copies)
+    // This removes deep nesting to save space and satisfy "recover left side only"
+    final prunedChildren = _liveRootNode!.children.map((c) => c.shallowCopy()).toList();
+    final prunedRoot = FileNode(
+      path: _liveRootNode!.path,
+      name: _liveRootNode!.name,
+      size: _liveRootNode!.size,
+      isFile: _liveRootNode!.isFile,
+      children: prunedChildren,
+    );
+
     final snapshot = Snapshot(
       id: name, // Using user input as ID/filename for simplicity, or generate UUID
       scanDate: DateTime.now(),
       scanDurationInSeconds: _scanTimer?.elapsed.inSeconds ?? 0,
-      rootPath: _liveRootNode!.path,
-      rootNode: _liveRootNode!,
+      rootPath: prunedRoot.path,
+      rootNode: prunedRoot,
     );
 
     await _snapshotService.saveSnapshot(snapshot);
@@ -245,10 +271,63 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  void _showLogsDialog() async {
+    final logs = await _logger.getLogs();
+    if (!mounted) return;
+
+    await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            const Icon(Icons.bug_report, color: Colors.teal),
+            const SizedBox(width: 8),
+            const Text("Application Logs"),
+            const Spacer(),
+            IconButton(
+              icon: const Icon(Icons.delete_outline), 
+              tooltip: "Clear Logs",
+              onPressed: () async {
+                 await _logger.clearLogs();
+                 if (context.mounted) Navigator.pop(context);
+              },
+            )
+          ],
+        ),
+        content: SizedBox(
+          width: 600,
+          height: 400,
+          child: logs.isEmpty 
+              ? const Center(child: Text("No logs found."))
+              : ListView.builder(
+                  itemCount: logs.length,
+                  itemBuilder: (context, index) {
+                    final log = logs[logs.length - 1 - index]; // Show newest first
+                    final isError = log.contains("[ERROR]");
+                    return SelectableText(
+                      log, 
+                      style: TextStyle(
+                        fontFamily: 'Consolas', 
+                        fontSize: 12,
+                        color: isError ? Colors.red.shade800 : Colors.black87
+                      ),
+                    );
+                  },
+                ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Close")),
+        ],
+      ),
+    );
+  }
+
   void _restoreLiveView() {
     setState(() {
       _isViewingSnapshot = false;
+      _isViewingSnapshot = false;
       _snapshotRootNode = null;
+      _currentDiskUsage = null; // Clear usage when returning from snapshot or resetting
 
       if (_liveRootNode != null) {
         _scanStatusMessage = "Returned to Live Scan";
@@ -263,6 +342,70 @@ class _HomeScreenState extends State<HomeScreen> {
     const suffixes = ["B", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB"];
     var i = (log(bytes) / log(1024)).floor();
     return '${(bytes / pow(1024, i)).toStringAsFixed(2)} ${suffixes[i]}';
+  }
+
+  void _startScanForPath(String path) {
+    setState(() {
+      _isLoading = true;
+      _isViewingSnapshot = false;
+      _snapshotRootNode = null;
+      _currentDiskUsage = null;
+      _scanStatusMessage = null;
+    });
+    _scanPath(path);
+  }
+
+  Future<void> _openFolderInExplorer(String path) async {
+    try {
+      if (Platform.isWindows) {
+        await Process.run('explorer', [path]);
+      } else if (Platform.isMacOS) {
+        await Process.run('open', [path]);
+      } else if (Platform.isLinux) {
+        await Process.run('xdg-open', [path]);
+      } else {
+        await launchUrl(Uri.file(path));
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not open folder: $e')),
+      );
+      await _logger.logError("Could not open folder $path", e);
+    }
+  }
+
+  Future<void> _showFolderOptions(FileNode node, Offset? globalPosition) async {
+    if (node.isFile || node.name == "Files") return;
+
+    final overlay = Overlay.of(context).context.findRenderObject() as RenderBox?;
+    final position = globalPosition ??
+        overlay?.localToGlobal(overlay.size.center(Offset.zero)) ??
+        Offset.zero;
+
+    final choice = await showMenu<String>(
+      context: context,
+      position: RelativeRect.fromLTRB(position.dx, position.dy, position.dx, position.dy),
+      items: const [
+        PopupMenuItem(
+          value: 'scan',
+          child: Text('Scan this folder now'),
+        ),
+        PopupMenuItem(
+          value: 'explorer',
+          child: Text('Open in Windows Explorer'),
+        ),
+      ],
+    );
+
+    switch (choice) {
+      case 'scan':
+        _startScanForPath(node.path);
+        break;
+      case 'explorer':
+        _openFolderInExplorer(node.path);
+        break;
+    }
   }
   
   @override
@@ -284,6 +427,11 @@ class _HomeScreenState extends State<HomeScreen> {
             onPressed: () {
                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Settings not implemented yet")));
             },
+          ),
+          IconButton(
+            icon: const Icon(Icons.bug_report),
+            tooltip: 'Logs',
+            onPressed: _showLogsDialog,
           ),
           if (_liveRootNode != null && !_isViewingSnapshot && !_isLoading)
             IconButton(
@@ -332,10 +480,7 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     if (_displayRootNode == null) {
-    if (_displayRootNode == null) {
       return _buildDashboard();
-    }
-
     }
 
     // Side-by-side Layout
@@ -358,6 +503,22 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
         
+        // Stats Header
+        if (_currentDiskUsage != null && !_isViewingSnapshot)
+          Container(
+            color: Colors.white,
+            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+            child: Row(
+              children: [
+                _buildStatItem("Disk Size", _formatBytes(_currentDiskUsage!.totalSpace)),
+                const SizedBox(width: 24),
+                _buildStatItem("Used", _formatBytes(_currentDiskUsage!.usedSpace)),
+                const SizedBox(width: 24),
+                _buildStatItem("Free", "${_currentDiskUsage!.freePercentage.toStringAsFixed(1)}%"),
+              ],
+            ),
+          ),
+        
         // Main Content
         Expanded(
           child: Row(
@@ -371,25 +532,11 @@ class _HomeScreenState extends State<HomeScreen> {
                   child: Stack(
                     children: [
                       Listener(
-                        onPointerDown: (event) async {
+                        onPointerDown: (event) {
                           if (event.buttons == kSecondaryMouseButton) {
                             if (_hoveredIndex >= 0 && _hoveredIndex < displayList.length) {
                               final node = displayList[_hoveredIndex];
-                              if (!node.isFile && node.name != "Files") {
-                                // Open folder
-                                // final uri = Uri.parse(node.path); // Unused
-                                // For local files, we might need 'file://' scheme or just pass path if supported.
-                                // url_launcher 'file:' support is patchy on Windows.
-                                // We'll try generic launch first.
-                                try {
-                                  // Simply using open works for many path types or file: scheme
-                                  if (!await launchUrl(Uri.file(node.path))) {
-                                      // debugPrint("Could not launch ${node.path}");
-                                  }
-                                } catch (e) {
-                                  // debugPrint("Error launching: $e");
-                                }
-                              }
+                              _showFolderOptions(node, event.position);
                             }
                           }
                         },
@@ -441,22 +588,41 @@ class _HomeScreenState extends State<HomeScreen> {
                         itemBuilder: (context, index) {
                           final node = displayList[index];
                           final isGroupedFiles = node.name == "Files" && node.isFile;
-                          return ListTile(
-                            dense: true,
-                            leading: Icon(
-                              isGroupedFiles 
-                                  ? Icons.file_copy 
-                                  : (node.isFile ? Icons.insert_drive_file : Icons.folder), 
-                              size: 20
-                            ),
-                            title: Text(node.name, maxLines: 1, overflow: TextOverflow.ellipsis),
-                            trailing: Text(_formatBytes(node.size)),
-                            onTap: () {
-                              if (!isGroupedFiles && !node.isFile) {
-                                // Navigate logic (to be implemented if navigation is desired)
-                                // or just highlight.
-                              }
+                          Offset? tapPosition;
+                          return GestureDetector(
+                            behavior: HitTestBehavior.opaque,
+                            onTapDown: (details) {
+                              tapPosition = details.globalPosition;
                             },
+                            onSecondaryTapDown: (details) {
+                              tapPosition = details.globalPosition;
+                              _showFolderOptions(node, tapPosition);
+                            },
+                            child: ListTile(
+                              dense: true,
+                              leading: Icon(
+                                isGroupedFiles 
+                                    ? Icons.file_copy 
+                                    : (node.isFile 
+                                        ? (node.name.startsWith("Others") ? Icons.more_horiz : Icons.insert_drive_file) 
+                                        : Icons.folder), 
+                                size: 20
+                              ),
+                              title: Text(node.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+                              trailing: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(_displayRootNode!.size > 0 ? "${(node.size / _displayRootNode!.size * 100).toStringAsFixed(1)}%" : ""),
+                                  const SizedBox(width: 8),
+                                  Text(_formatBytes(node.size)),
+                                ],
+                              ),
+                              onTap: () {
+                                if (!isGroupedFiles && !node.isFile) {
+                                  _showFolderOptions(node, tapPosition);
+                                }
+                              },
+                            ),
                           );
                         },
                       ),
@@ -547,14 +713,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                         dense: true,
                                         onTap: () async {
                                            // Rescan this path
-                                           setState(() {
-                                             _isLoading = true;
-                                             _isViewingSnapshot = false;
-                                             _snapshotRootNode = null;
-                                             _scanStatusMessage = null;
-                                           });
-                                           // We need to trigger scan logic similar to _pickDirectory but with fixed path
-                                           _scanPath(path);
+                                           _startScanForPath(path);
                                         },
                                       );
                                     },
@@ -624,6 +783,10 @@ class _HomeScreenState extends State<HomeScreen> {
       _scanTimer = Stopwatch()..start();
       try {
         final node = await _scanner.scanDirectory(path);
+        
+        // Fetch stats
+        final usage = await _diskService.getDiskUsage(path);
+
         _scanTimer?.stop();
         
         // Update recent scans (moves to top)
@@ -644,22 +807,32 @@ class _HomeScreenState extends State<HomeScreen> {
         if (mounted) {
           setState(() {
             _liveRootNode = node;
+            _currentDiskUsage = usage;
             _scanStatusMessage = "Scanning complete! Took $timeMsg.";
             _isLoading = false;
           });
         }
-      } catch(e) {
+      } catch (e) {
+        await _logger.logError("Error scanning path $path", e);
+      } finally {
         if(mounted) {
-             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Error scanning: $e')),
-            );
-            setState(() {
-              _isLoading = false;
-            });
+           setState(() {
+             _isLoading = false;
+           });
         }
       }
   }
 
+
+  Widget _buildStatItem(String label, String value) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+        Text(value, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+      ],
+    );
+  }
 
   Widget _buildChart(List<FileNode> entries, int totalSize) {
 
@@ -697,7 +870,9 @@ class _HomeScreenState extends State<HomeScreen> {
              
               return PieChartSectionData(
                 value: value,
-                title: isLarge ? node.name : "",
+                title: (isLarge && isHovered) || (node.size / totalSize > 1/16) 
+                    ? "${node.name}\n${_formatBytes(node.size)}" 
+                    : "",
                 radius: isHovered ? (min(constraints.maxWidth, constraints.maxHeight) / 2.3) : min(constraints.maxWidth, constraints.maxHeight) / 2.5,
                 titleStyle: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.black),
                 color: Colors.primaries[i % Colors.primaries.length].withValues(alpha: isHovered ? 0.8 : 1.0),

@@ -36,6 +36,15 @@ class FileNode {
           .toList() ?? [],
     );
   }
+  FileNode shallowCopy() {
+    return FileNode(
+      path: path,
+      name: name,
+      size: size,
+      isFile: isFile,
+      children: [], // No children
+    );
+  }
 }
 
 class DiskScanner {
@@ -61,6 +70,9 @@ class DiskScanner {
               isFile: true,
             ));
           } else if (entity is Directory) {
+            // Skip symbolic links/junctions that mimic Directories to avoid loops
+            if (await FileSystemEntity.isLink(entity.path)) continue;
+            
             // Recursive call
             // Note: For deep trees, this might need optimization or isolation, 
             // but for a start, direct recursion is fine.
@@ -79,6 +91,29 @@ class DiskScanner {
 
     // Sort children by size descending
     children.sort((a, b) => b.size.compareTo(a.size));
+
+    // Collapse small items if too many
+    const int maxItems = 20;
+    if (children.length > maxItems) {
+      final topChildren = children.take(maxItems).toList();
+      final otherChildren = children.skip(maxItems);
+      
+      int othersSize = 0;
+      for (final c in otherChildren) {
+        othersSize += c.size;
+      }
+      
+      if (othersSize > 0) {
+        topChildren.add(FileNode(
+          path: "", 
+          name: "Others (${children.length - maxItems} items)",
+          size: othersSize,
+          isFile: true, // Treated as file (leaf)
+          children: [],
+        ));
+      }
+      children = topChildren;
+    }
 
     return FileNode(
       path: path,
