@@ -34,7 +34,7 @@ class DiskPieApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'DiskPie 0.2.0',
+      title: 'DiskPie 0.3.1',
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.teal),
         useMaterial3: true,

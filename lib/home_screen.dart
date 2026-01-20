@@ -37,6 +37,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   bool _isLoading = false;
   String? _scanStatusMessage; // "Scanning complete took X minutes"
+  int _scannedCount = 0;
   
   final DiskScanner _scanner = DiskScanner();
   final DiskService _diskService = DiskService();
@@ -99,6 +100,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     setState(() {
       _isLoading = true;
+      _scannedCount = 0;
       _isViewingSnapshot = false; // Switch back to live mode
       _snapshotRootNode = null;
       _scanStatusMessage = null;
@@ -107,7 +109,16 @@ class _HomeScreenState extends State<HomeScreen> {
     _scanTimer = Stopwatch()..start();
 
     try {
-      final node = await _scanner.scanDirectory(directoryPath);
+      final node = await _scanner.scanDirectory(
+        directoryPath, 
+        onProgress: (count) {
+          if (mounted) {
+            setState(() {
+               _scannedCount = count;
+            });
+          }
+        }
+      );
       await _recentScansService.addRecentScan(directoryPath);
       _refreshDashboardData();
 
@@ -347,6 +358,7 @@ class _HomeScreenState extends State<HomeScreen> {
   void _startScanForPath(String path) {
     setState(() {
       _isLoading = true;
+      _scannedCount = 0;
       _isViewingSnapshot = false;
       _snapshotRootNode = null;
       _currentDiskUsage = null;
@@ -467,13 +479,21 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildBody() {
     if (_isLoading) {
-      return const Center(
+      return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            CircularProgressIndicator(),
-            SizedBox(height: 16),
-            Text("Scanning directory... This may take a while for large disks."),
+            const CircularProgressIndicator(),
+            const SizedBox(height: 16),
+            const Text("Scanning directory... This may take a while for large disks."),
+            if (_scannedCount > 0)
+              Padding(
+                padding: const EdgeInsets.only(top: 8.0),
+                child: Text(
+                  "Scanned $_scannedCount items...", 
+                  style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.teal),
+                ),
+              )
           ],
         ),
       );
@@ -782,7 +802,16 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _scanPath(String path) async {
       _scanTimer = Stopwatch()..start();
       try {
-        final node = await _scanner.scanDirectory(path);
+        final node = await _scanner.scanDirectory(
+          path,
+          onProgress: (count) {
+             if (mounted) {
+               setState(() {
+                 _scannedCount = count;
+               });
+             }
+          }
+        );
         
         // Fetch stats
         final usage = await _diskService.getDiskUsage(path);
