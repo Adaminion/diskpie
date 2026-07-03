@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>User Manual - DiskPie</title>
+    <link rel="stylesheet" href="assets/styles.css">
+</head>
+
+<body>
+
+    <header>
+        <div class="container">
+            <div style="display:flex; align-items:center;">
+                <h3 style="margin:0; color:var(--accent-color);">DiskPie</h3>
+            </div>
+            <nav>
+                <ul>
+                    <li><a href="index.html">Home</a></li>
+                    <li><a href="gallery.html">Gallery</a></li>
+                    <li><a href="manual.html" style="color:var(--accent-color);">Manual</a></li>
+                    <li><a href="release-notes.html">Release Notes</a></li>
+                    <li><a href="about.html">About Me</a></li>
+                    <li><a href="index.html#contact">Contact</a></li>
+                    <li><a href="https://adaminion.com" target="_blank" class="external-link">Developer:
+                            adaminion.com</a></li>
+                </ul>
+            </nav>
+            <div id="google_translate_element"></div>
+        </div>
+    </header>
+
+    <main>
+        <div class="manual-content animate-fade-in">
+            <h1>User Manual</h1>
+
+            <section>
+                <h2>Getting Started</h2>
+                <p>DiskPie is designed to be intuitive. Upon launching the app, simply click the <strong>"Scan New
+                        Folder"</strong> button. Select a drive or folder you wish to analyze. The app will immediately
+                    begin scanning the directory structure.</p>
+            </section>
+
+            <section>
+                <h2>Key Features</h2>
+                <ul>
+                    <li><strong>Interactive Charts:</strong> Click on pie chart slices to navigate into subfolders.</li>
+                    <li><strong>File List:</strong> Sort files by size to identify storage hogs.</li>
+                    <li><strong>Snapshots:</strong> Save scan results to review later without rescaning.</li>
+                    <li><strong>Fast Mode:</strong> Option to skip small files for quicker results.</li>
+                </ul>
+            </section>
+
+            <section>
+                <h2>FAQ</h2>
+                <p><strong>Q: Does DiskPie delete files?</strong><br>
+                    A: No, DiskPie is a read-only analyzer. Use Finder or Explorer to delete files safely.</p>
+
+                <p><strong>Q: Is my data sent to the cloud?</strong><br>
+                    A: Absolutely not. DiskPie runs 100% offline on your machine.</p>
+            </section>
+
+            <section>
+                <h2>Troubleshooting</h2>
+                <p>If you encounter permission errors on macOS, ensure you have granted disk access permissions in
+                    System Settings > Privacy & Security > Full Disk Access.</p>
+            </section>
+        </div>
+    </main>
+
+    <footer>
+        <div class="container" style="flex-direction: column;">
+            <p>&copy; 2026 Adaminion App. All rights reserved.</p>
+        </div>
+    </footer>
+
+    <script src="assets/main.js"></script>
+    <script type="text/javascript">
+        function googleTranslateElementInit() {
+            new google.translate.TranslateElement({ pageLanguage: 'en', layout: google.translate.TranslateElement.InlineLayout.SIMPLE }, 'google_translate_element');
+        }
+    </script>
+    <script type="text/javascript"
+        src="//translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
+</body>
+
+</html>

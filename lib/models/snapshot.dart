@@ -6,6 +6,9 @@ class Snapshot {
   final int scanDurationInSeconds;
   final String rootPath;
   final FileNode rootNode;
+  final int totalFiles;
+  final int totalFolders;
+  final int totalSize;
 
   Snapshot({
     required this.id,
@@ -13,6 +16,9 @@ class Snapshot {
     required this.scanDurationInSeconds,
     required this.rootPath,
     required this.rootNode,
+    this.totalFiles = 0,
+    this.totalFolders = 0,
+    this.totalSize = 0,
   });
 
   Map<String, dynamic> toJson() {
@@ -22,6 +28,9 @@ class Snapshot {
       'scanDurationInSeconds': scanDurationInSeconds,
       'rootPath': rootPath,
       'rootNode': rootNode.toJson(),
+      'totalFiles': totalFiles,
+      'totalFolders': totalFolders,
+      'totalSize': totalSize,
     };
   }
 
@@ -32,6 +41,9 @@ class Snapshot {
       scanDurationInSeconds: json['scanDurationInSeconds'],
       rootPath: json['rootPath'],
       rootNode: FileNode.fromJson(json['rootNode']),
+      totalFiles: json['totalFiles'] ?? 0,
+      totalFolders: json['totalFolders'] ?? 0,
+      totalSize: json['totalSize'] ?? 0,
     );
   }
 }

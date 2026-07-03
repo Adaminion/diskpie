@@ -8,6 +8,8 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart'; // For right-click 'open in explorer'
 
+import 'app_info.dart';
+import 'format_bytes.dart';
 import 'models/snapshot.dart';
 import 'scanner.dart';
 import 'services/recent_scans_service.dart';
@@ -38,6 +40,11 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _isLoading = false;
   String? _scanStatusMessage; // "Scanning complete took X minutes"
   int _scannedCount = 0;
+  int _scannedFileCount = 0;
+  int _scannedFolderCount = 0;
+  String _scanCurrentPath = '';
+  bool _scanIsVolumeRoot = false;
+
   
   final DiskScanner _scanner = DiskScanner();
   final DiskService _diskService = DiskService();
@@ -57,6 +64,10 @@ class _HomeScreenState extends State<HomeScreen> {
   Stopwatch? _scanTimer;
 
   // Helpers
+  // Synthetic slice names used when a whole volume was scanned
+  static const String _kFreeSpaceName = "Free Space";
+  static const String _kOutsideScanName = "Outside Scan";
+
   // Returns the node currently being displayed
   FileNode? get _displayRootNode => _isViewingSnapshot ? _snapshotRootNode : _liveRootNode;
 
@@ -83,6 +94,19 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     folders.sort((a, b) => b.size.compareTo(a.size));
+
+    // For a whole-volume scan, complete the pie so it represents the entire
+    // disk: scanned content + space the scan couldn't see + free space.
+    final usage = _currentDiskUsage;
+    if (_scanIsVolumeRoot && !_isViewingSnapshot && usage != null) {
+      final outside = usage.usedSpace - root.size;
+      if (outside > usage.usedSpace ~/ 100) {
+        folders.add(FileNode(path: "", name: _kOutsideScanName, size: outside, isFile: true));
+      }
+      if (usage.freeSpace > 0) {
+        folders.add(FileNode(path: "", name: _kFreeSpaceName, size: usage.freeSpace, isFile: true));
+      }
+    }
     return folders;
   }
 
@@ -97,77 +121,25 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _pickDirectory() async {
     final String? directoryPath = await getDirectoryPath();
     if (directoryPath == null) return;
-
-    setState(() {
-      _isLoading = true;
-      _scannedCount = 0;
-      _isViewingSnapshot = false; // Switch back to live mode
-      _snapshotRootNode = null;
-      _scanStatusMessage = null;
-    });
-
-    _scanTimer = Stopwatch()..start();
-
-    try {
-      final node = await _scanner.scanDirectory(
-        directoryPath, 
-        onProgress: (count) {
-          if (mounted) {
-            setState(() {
-               _scannedCount = count;
-            });
-          }
-        }
-      );
-      await _recentScansService.addRecentScan(directoryPath);
-      _refreshDashboardData();
-
-      _scanTimer?.stop();
-
-      // Fetch Disk Usage
-      final usage = await _diskService.getDiskUsage(directoryPath);
-      
-      final elapsed = _scanTimer?.elapsed;
-      String timeMsg = "";
-      if (elapsed != null) {
-        if (elapsed.inMinutes > 0) {
-          timeMsg = "${elapsed.inMinutes} minutes and ${elapsed.inSeconds % 60} seconds";
-        } else {
-          timeMsg = "${elapsed.inSeconds} seconds";
-        }
-      }
-
-      if (mounted) {
-        setState(() {
-          _liveRootNode = node;
-          _currentDiskUsage = usage;
-          _scanStatusMessage = "Scanning complete! Took $timeMsg.";
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(_scanStatusMessage!)),
-        );
-      }
-      } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error scanning: $e')),
-        );
-      }
-      await _logger.logError("Error in _pickDirectory for path $directoryPath", e);
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
-    }
+    _startScanForPath(directoryPath);
   }
 
   Future<void> _saveSnapshot() async {
     if (_liveRootNode == null || _isViewingSnapshot) return;
 
-    final name = await _showInputDialog("Snapshot Name", "Enter a name/ID for this snapshot");
-    if (name == null || name.isEmpty) return;
+    String folderName = _liveRootNode!.name;
+    // Sanitize folder name
+    folderName = folderName.replaceAll(RegExp(r'[<>:"/\\|?*]'), '_');
+    if (folderName.isEmpty) folderName = "Drive";
+    
+    final dateStr = DateFormat('yyyyMMdd_HHmm').format(DateTime.now());
+    final defaultName = "DPSnap_${folderName}_$dateStr";
+
+    final rawName = await _showInputDialog("Snapshot Name", "Enter a name/ID for this snapshot", defaultName);
+    if (rawName == null) return;
+    // The name doubles as the snapshot's filename — sanitize what was typed too.
+    final name = rawName.replaceAll(RegExp(r'[<>:"/\\|?*]'), '_').trim();
+    if (name.isEmpty) return;
 
     // Prune tree: Keep root and its immediate children (shallow copies)
     // This removes deep nesting to save space and satisfy "recover left side only"
@@ -186,6 +158,9 @@ class _HomeScreenState extends State<HomeScreen> {
       scanDurationInSeconds: _scanTimer?.elapsed.inSeconds ?? 0,
       rootPath: prunedRoot.path,
       rootNode: prunedRoot,
+      totalFiles: _scannedFileCount,
+      totalFolders: _scannedFolderCount,
+      totalSize: _liveRootNode!.size,
     );
 
     await _snapshotService.saveSnapshot(snapshot);
@@ -198,8 +173,8 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  Future<String?> _showInputDialog(String title, String hint) {
-    String value = "Snapshot_${DateFormat('yyyyMMdd_HHmm').format(DateTime.now())}";
+  Future<String?> _showInputDialog(String title, String hint, [String? initialValue]) {
+    String value = initialValue ?? "Snapshot_${DateFormat('yyyyMMdd_HHmm').format(DateTime.now())}";
     return showDialog<String>(
       context: context,
       builder: (context) {
@@ -249,7 +224,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         leading: const Icon(Icons.history),
                         title: Text(s.id),
                         subtitle: Text(
-                          "${s.rootPath}\n${DateFormat.yMMMd().add_jm().format(s.scanDate)} - Took ${s.scanDurationInSeconds}s",
+                          "${s.rootPath}\n${DateFormat.yMMMd().add_jm().format(s.scanDate)} - ${formatBytes(s.totalSize)} - Took ${s.scanDurationInSeconds}s",
                         ),
                         isThreeLine: true,
                         trailing: IconButton(
@@ -336,7 +311,6 @@ class _HomeScreenState extends State<HomeScreen> {
   void _restoreLiveView() {
     setState(() {
       _isViewingSnapshot = false;
-      _isViewingSnapshot = false;
       _snapshotRootNode = null;
       _currentDiskUsage = null; // Clear usage when returning from snapshot or resetting
 
@@ -348,23 +322,19 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
-  String _formatBytes(int bytes) {
-    if (bytes <= 0) return "0 B";
-    const suffixes = ["B", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB"];
-    var i = (log(bytes) / log(1024)).floor();
-    return '${(bytes / pow(1024, i)).toStringAsFixed(2)} ${suffixes[i]}';
-  }
-
   void _startScanForPath(String path) {
     setState(() {
       _isLoading = true;
       _scannedCount = 0;
+      _scannedFileCount = 0;
+      _scannedFolderCount = 0;
+      _scanCurrentPath = '';
       _isViewingSnapshot = false;
       _snapshotRootNode = null;
       _currentDiskUsage = null;
       _scanStatusMessage = null;
     });
-    _scanPath(path);
+    _runScan(path);
   }
 
   Future<void> _openFolderInExplorer(String path) async {
@@ -398,14 +368,18 @@ class _HomeScreenState extends State<HomeScreen> {
     final choice = await showMenu<String>(
       context: context,
       position: RelativeRect.fromLTRB(position.dx, position.dy, position.dx, position.dy),
-      items: const [
-        PopupMenuItem(
+      items: [
+        const PopupMenuItem(
           value: 'scan',
           child: Text('Scan this folder now'),
         ),
         PopupMenuItem(
           value: 'explorer',
-          child: Text('Open in Windows Explorer'),
+          child: Text(Platform.isMacOS
+              ? 'Reveal in Finder'
+              : Platform.isWindows
+                  ? 'Open in File Explorer'
+                  : 'Open in file manager'),
         ),
       ],
     );
@@ -430,7 +404,7 @@ class _HomeScreenState extends State<HomeScreen> {
             icon: const Icon(Icons.info_outline),
             tooltip: 'Info',
             onPressed: () {
-               showAboutDialog(context: context, applicationName: "DiskPie", applicationVersion: "1.0.0");
+               showAboutDialog(context: context, applicationName: "DiskPie", applicationVersion: appVersion);
             },
           ),
           IconButton(
@@ -490,10 +464,26 @@ class _HomeScreenState extends State<HomeScreen> {
               Padding(
                 padding: const EdgeInsets.only(top: 8.0),
                 child: Text(
-                  "Scanned $_scannedCount items...", 
+                  "Scanned $_scannedCount items...",
                   style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.teal),
                 ),
-              )
+              ),
+            if (_scanCurrentPath.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 48, vertical: 4),
+                child: Text(
+                  _scanCurrentPath,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 12, color: Colors.grey),
+                ),
+              ),
+            const SizedBox(height: 16),
+            OutlinedButton.icon(
+              onPressed: () => _scanner.cancel(),
+              icon: const Icon(Icons.stop),
+              label: const Text("Cancel"),
+            ),
           ],
         ),
       );
@@ -505,6 +495,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
     // Side-by-side Layout
     final displayList = _processedChildren;
+    // Base for percentages and slice labels: everything shown in the pie.
+    // Equals the scanned size unless whole-volume extras were appended.
+    final displayTotal = displayList.fold<int>(0, (sum, n) => sum + n.size);
 
     return Column(
       children: [
@@ -530,11 +523,29 @@ class _HomeScreenState extends State<HomeScreen> {
             padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
             child: Row(
               children: [
-                _buildStatItem("Disk Size", _formatBytes(_currentDiskUsage!.totalSpace)),
+                _buildStatItem("Disk Size", formatBytes(_currentDiskUsage!.totalSpace)),
                 const SizedBox(width: 24),
-                _buildStatItem("Used", _formatBytes(_currentDiskUsage!.usedSpace)),
+                _buildStatItem("Used", formatBytes(_currentDiskUsage!.usedSpace)),
                 const SizedBox(width: 24),
                 _buildStatItem("Free", "${_currentDiskUsage!.freePercentage.toStringAsFixed(1)}%"),
+                const SizedBox(width: 24),
+                _buildStatItem("This Scan", formatBytes(_displayRootNode!.size)),
+                // When a whole volume was scanned, show how much used space the
+                // scan couldn't see (Trash, system folders, no-permission items)
+                // so the numbers reconcile with Finder/Explorer.
+                if (_scanIsVolumeRoot &&
+                    _currentDiskUsage!.usedSpace - _displayRootNode!.size >
+                        _currentDiskUsage!.usedSpace ~/ 100) ...[
+                  const SizedBox(width: 24),
+                  Tooltip(
+                    message:
+                        "Used space on this volume that the scan couldn't see:\nTrash, system folders, or items without read permission.",
+                    child: _buildStatItem(
+                      "Outside Scan",
+                      formatBytes(_currentDiskUsage!.usedSpace - _displayRootNode!.size),
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
@@ -565,7 +576,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             _mousePos = event.localPosition;
                           });
                         },
-                        child: _buildChart(displayList, _displayRootNode!.size),
+                        child: _buildChart(displayList, displayTotal),
                       ),
                       // Custom Tooltip Overlay
                       if (_hoveredIndex >= 0 && _hoveredIndex < displayList.length)
@@ -580,7 +591,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 borderRadius: BorderRadius.circular(4),
                               ),
                               child: Text(
-                                "${displayList[_hoveredIndex].name}\n${_formatBytes(displayList[_hoveredIndex].size)}",
+                                "${displayList[_hoveredIndex].name}\n${formatBytes(displayList[_hoveredIndex].size)}",
                                 style: const TextStyle(color: Colors.white, fontSize: 12),
                               ),
                             ),
@@ -608,6 +619,20 @@ class _HomeScreenState extends State<HomeScreen> {
                         itemBuilder: (context, index) {
                           final node = displayList[index];
                           final isGroupedFiles = node.name == "Files" && node.isFile;
+                          IconData leadingIcon;
+                          if (isGroupedFiles) {
+                            leadingIcon = Icons.file_copy;
+                          } else if (node.name == _kFreeSpaceName) {
+                            leadingIcon = Icons.circle_outlined;
+                          } else if (node.name == _kOutsideScanName) {
+                            leadingIcon = Icons.visibility_off;
+                          } else if (node.isFile) {
+                            leadingIcon = node.name.startsWith("Others")
+                                ? Icons.more_horiz
+                                : Icons.insert_drive_file;
+                          } else {
+                            leadingIcon = Icons.folder;
+                          }
                           Offset? tapPosition;
                           return GestureDetector(
                             behavior: HitTestBehavior.opaque,
@@ -620,21 +645,14 @@ class _HomeScreenState extends State<HomeScreen> {
                             },
                             child: ListTile(
                               dense: true,
-                              leading: Icon(
-                                isGroupedFiles 
-                                    ? Icons.file_copy 
-                                    : (node.isFile 
-                                        ? (node.name.startsWith("Others") ? Icons.more_horiz : Icons.insert_drive_file) 
-                                        : Icons.folder), 
-                                size: 20
-                              ),
+                              leading: Icon(leadingIcon, size: 20),
                               title: Text(node.name, maxLines: 1, overflow: TextOverflow.ellipsis),
                               trailing: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  Text(_displayRootNode!.size > 0 ? "${(node.size / _displayRootNode!.size * 100).toStringAsFixed(1)}%" : ""),
+                                  Text(displayTotal > 0 ? "${(node.size / displayTotal * 100).toStringAsFixed(1)}%" : ""),
                                   const SizedBox(width: 8),
-                                  Text(_formatBytes(node.size)),
+                                  Text(formatBytes(node.size)),
                                 ],
                               ),
                               onTap: () {
@@ -799,57 +817,96 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Future<void> _scanPath(String path) async {
-      _scanTimer = Stopwatch()..start();
-      try {
-        final node = await _scanner.scanDirectory(
-          path,
-          onProgress: (count) {
-             if (mounted) {
-               setState(() {
-                 _scannedCount = count;
-               });
-             }
+  Future<void> _runScan(String path) async {
+    _scanTimer = Stopwatch()..start();
+    try {
+      final result = await _scanner.scanDirectory(
+        path,
+        onProgress: (progress) {
+          if (mounted) {
+            setState(() {
+              _scannedCount = progress.itemCount;
+              _scanCurrentPath = progress.currentPath;
+            });
           }
-        );
-        
-        // Fetch stats
-        final usage = await _diskService.getDiskUsage(path);
+        },
+      );
+      _scanTimer?.stop();
 
-        _scanTimer?.stop();
-        
-        // Update recent scans (moves to top)
-        await _recentScansService.addRecentScan(path);
-        _refreshDashboardData();
-
-
-        final elapsed = _scanTimer?.elapsed;
-        String timeMsg = "";
-        if (elapsed != null) {
-          if (elapsed.inMinutes > 0) {
-            timeMsg = "${elapsed.inMinutes} minutes and ${elapsed.inSeconds % 60} seconds";
-          } else {
-            timeMsg = "${elapsed.inSeconds} seconds";
-          }
-        }
-  
+      if (result == null) {
+        // Cancelled by the user; keep whatever was on screen before.
         if (mounted) {
           setState(() {
-            _liveRootNode = node;
-            _currentDiskUsage = usage;
-            _scanStatusMessage = "Scanning complete! Took $timeMsg.";
-            _isLoading = false;
+            _scanStatusMessage = "Scan cancelled.";
           });
         }
-      } catch (e) {
-        await _logger.logError("Error scanning path $path", e);
-      } finally {
-        if(mounted) {
-           setState(() {
-             _isLoading = false;
-           });
+        return;
+      }
+
+      // Update recent scans (moves to top)
+      await _recentScansService.addRecentScan(path);
+      _refreshDashboardData();
+
+      // Fetch stats
+      final usage = await _diskService.getDiskUsage(path);
+      final isVolumeRoot =
+          usage?.mountedOn != null && _sameVolumeRoot(path, usage!.mountedOn!);
+
+      final elapsed = _scanTimer?.elapsed;
+      String timeMsg = "";
+      if (elapsed != null) {
+        if (elapsed.inMinutes > 0) {
+          timeMsg = "${elapsed.inMinutes} minutes and ${elapsed.inSeconds % 60} seconds";
+        } else if (elapsed.inSeconds > 0) {
+          timeMsg = "${elapsed.inSeconds} seconds";
+        } else {
+          timeMsg = "under a second";
         }
       }
+
+      final skippedMsg = result.skippedCount > 0
+          ? " ${result.skippedCount} items could not be read (no permission)."
+          : "";
+
+      if (mounted) {
+        setState(() {
+          _liveRootNode = result.rootNode;
+          _scannedFileCount = result.fileCount;
+          _scannedFolderCount = result.folderCount;
+          _currentDiskUsage = usage;
+          _scanIsVolumeRoot = isVolumeRoot;
+          _scanStatusMessage =
+              "Finished! Scanning \"${result.rootNode.name}\" folder containing $_scannedFolderCount folders and $_scannedFileCount files (${formatBytes(result.rootNode.size)}) took $timeMsg.$skippedMsg";
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(_scanStatusMessage!)),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error scanning: $e')),
+        );
+      }
+      await _logger.logError("Error scanning path $path", e);
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  // Same volume root if they differ only by trailing separators (and case on Windows).
+  bool _sameVolumeRoot(String a, String b) {
+    String norm(String s) {
+      var v = s.replaceAll(RegExp(r'[\\/]+$'), '');
+      if (v.isEmpty) v = '/';
+      return Platform.isWindows ? v.toLowerCase() : v;
+    }
+
+    return norm(a) == norm(b);
   }
 
 
@@ -900,11 +957,16 @@ class _HomeScreenState extends State<HomeScreen> {
               return PieChartSectionData(
                 value: value,
                 title: (isLarge && isHovered) || (node.size / totalSize > 1/16) 
-                    ? "${node.name}\n${_formatBytes(node.size)}" 
+                    ? "${node.name}\n${formatBytes(node.size)}" 
                     : "",
                 radius: isHovered ? (min(constraints.maxWidth, constraints.maxHeight) / 2.3) : min(constraints.maxWidth, constraints.maxHeight) / 2.5,
                 titleStyle: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.black),
-                color: Colors.primaries[i % Colors.primaries.length].withValues(alpha: isHovered ? 0.8 : 1.0),
+                color: (node.name == _kFreeSpaceName
+                        ? Colors.grey.shade300
+                        : node.name == _kOutsideScanName
+                            ? Colors.blueGrey.shade300
+                            : Colors.primaries[i % Colors.primaries.length])
+                    .withValues(alpha: isHovered ? 0.8 : 1.0),
                 showTitle: true,
               );
             }),

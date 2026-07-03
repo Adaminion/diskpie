@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DiskPie | Visual Disk Analyzer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="background-grid"></div>
+  <div class="page">
+    <header class="nav">
+      <div class="brand">
+        <img src="../assets/logo.png" alt="DiskPie logo">
+        <span>DiskPie</span>
+      </div>
+      <div class="nav-actions">
+        <a class="link" href="#features">Features</a>
+        <a class="link" href="#workflow">Workflow</a>
+        <a class="ghost" href="https://github.com/adamac/diskpie">View on GitHub</a>
+        <a class="primary" href="https://github.com/adamac/diskpie" title="Download or clone DiskPie">Get DiskPie</a>
+      </div>
+    </header>
+
+    <main>
+      <section class="hero" id="top">
+        <div class="hero-copy">
+          <p class="eyebrow">Desktop disk clarity • fast pie visualizer</p>
+          <h1>See where your storage is hiding things.</h1>
+          <p class="lede">DiskPie scans any folder, turns it into a live pie chart, and gives you right-click controls to open, rescan, or save the state for later.</p>
+          <div class="actions">
+            <a class="primary" href="https://github.com/adamac/diskpie">Download the app</a>
+            <a class="ghost" href="#features">What makes it different?</a>
+          </div>
+          <div class="hero-tags">
+            <span>Pie slices with hover tooltips</span>
+            <span>Snapshots you can reopen</span>
+            <span>Recent scans at a tap</span>
+          </div>
+        </div>
+        <div class="hero-visual">
+          <div class="ui-card">
+            <div class="card-head">
+              <div class="pill">Live scan</div>
+              <span class="muted">/Users/...</span>
+            </div>
+            <div class="chart">
+              <div class="ring ring-a"></div>
+              <div class="ring ring-b"></div>
+              <div class="ring ring-c"></div>
+              <div class="center">
+                <span>Pie</span>
+                <small>Hover to inspect</small>
+              </div>
+            </div>
+            <div class="stat-row">
+              <div>
+                <p class="label">Disk Size</p>
+                <p class="value">1.0 TB</p>
+              </div>
+              <div>
+                <p class="label">Used</p>
+                <p class="value">542 GB</p>
+              </div>
+              <div>
+                <p class="label">Free</p>
+                <p class="value">46%</p>
+              </div>
+            </div>
+            <div class="list">
+              <div class="row">
+                <span class="dot dot-blue"></span>
+                <span>Projects</span>
+                <span class="size">32%</span>
+                <span class="size">178 GB</span>
+              </div>
+              <div class="row">
+                <span class="dot dot-green"></span>
+                <span>Media</span>
+                <span class="size">21%</span>
+                <span class="size">117 GB</span>
+              </div>
+              <div class="row">
+                <span class="dot dot-amber"></span>
+                <span>Downloads</span>
+                <span class="size">14%</span>
+                <span class="size">78 GB</span>
+              </div>
+              <div class="row">
+                <span class="dot dot-silver"></span>
+                <span>Files (grouped)</span>
+                <span class="size">7%</span>
+                <span class="size">39 GB</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="features">
+        <div class="section-head">
+          <p class="eyebrow">What you get</p>
+          <h2>Simple, vivid, and built for cleaning up space.</h2>
+          <p class="muted">DiskPie is a desktop-first Flutter app for visualizing disk usage without digging through endless folders.</p>
+        </div>
+        <div class="feature-grid">
+          <article class="feature-card">
+            <h3>Instant pie map</h3>
+            <p>Scan any directory and immediately see folders and grouped files as color-coded slices with hover tooltips.</p>
+            <ul>
+              <li>Limitless slices, auto-grouped files</li>
+              <li>Hover highlights with percentages</li>
+              <li>Readable labels that avoid clutter</li>
+            </ul>
+          </article>
+          <article class="feature-card">
+            <h3>Snapshots you can reopen</h3>
+            <p>Save a shallow snapshot of your scan, then load it later to recall what was taking up space at that moment.</p>
+            <ul>
+              <li>Name snapshots however you like</li>
+              <li>Lightweight saves that keep the top-level picture</li>
+              <li>Delete snapshots in-app when you're done</li>
+            </ul>
+          </article>
+          <article class="feature-card">
+            <h3>Right-click actions</h3>
+            <p>Open folders in your file explorer or rescan a subfolder straight from the chart and list.</p>
+            <ul>
+              <li>Context menu on slices and rows</li>
+              <li>Jump directly into Explorer/Finder</li>
+              <li>Rescan a hot spot without starting over</li>
+            </ul>
+          </article>
+          <article class="feature-card">
+            <h3>At-a-glance stats</h3>
+            <p>Disk size, used space, free percentage, and recent scan locations stay pinned above your chart.</p>
+            <ul>
+              <li>Recent locations list for quick re-runs</li>
+              <li>Saved snapshots list within reach</li>
+              <li>Snackbars and logs for transparency</li>
+            </ul>
+          </article>
+        </div>
+      </section>
+
+      <section class="section steps" id="workflow">
+        <div class="section-head">
+          <p class="eyebrow">Workflow</p>
+          <h2>From scan to cleanup in three moves.</h2>
+        </div>
+        <div class="step-row">
+          <div class="step">
+            <div class="step-num">1</div>
+            <h4>Pick a folder</h4>
+            <p>Choose any path. DiskPie streams progress so you always know what's being scanned.</p>
+          </div>
+          <div class="step">
+            <div class="step-num">2</div>
+            <h4>Hover and right-click</h4>
+            <p>Inspect slices, open heavy folders in your OS, or rescan a specific branch immediately.</p>
+          </div>
+          <div class="step">
+            <div class="step-num">3</div>
+            <h4>Save the moment</h4>
+            <p>Capture a snapshot once you're happy. Reopen it later to recall what changed.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="section double">
+        <div class="panel">
+          <p class="eyebrow">Why DiskPie</p>
+          <h2>Made for visual thinkers.</h2>
+          <p class="muted">No walls of text, just a live pie, a grouped file bucket, and the controls you actually need.</p>
+          <ul class="bullets">
+            <li>Colorful slices that stay legible on hover</li>
+            <li>Grouped files to avoid tiny unreadable segments</li>
+            <li>Logs drawer for troubleshooting</li>
+            <li>Works on macOS, Windows, and Linux when built with Flutter</li>
+          </ul>
+          <div class="actions">
+            <a class="primary" href="https://github.com/adamac/diskpie">Clone the repo</a>
+            <a class="ghost" href="#top">Back to top</a>
+          </div>
+        </div>
+        <div class="panel outline">
+          <div class="mini-card">
+            <p class="label">Recent scans</p>
+            <div class="mini-list">
+              <span>~/Projects/monorepo</span>
+              <span>/Volumes/Media</span>
+              <span>C:/Users/You/Downloads</span>
+            </div>
+          </div>
+          <div class="mini-card">
+            <p class="label">Snapshot shelf</p>
+            <div class="mini-list">
+              <span>Snapshot_2026_01_23</span>
+              <span>Post-cleanup</span>
+              <span>NVMe_before_trip</span>
+            </div>
+          </div>
+          <div class="mini-card">
+            <p class="label">Log highlights</p>
+            <div class="mini-list">
+              <span>[INFO] Scan complete in 42s</span>
+              <span>[INFO] Snapshot saved</span>
+              <span>[INFO] Opened in Finder</span>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <p>DiskPie is an open-source disk usage visualizer. Clone it, run it, and reclaim your storage.</p>
+      <a class="link" href="https://github.com/adamac/diskpie">GitHub repo</a>
+    </footer>
+  </div>
+</body>
+</html>

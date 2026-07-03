@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DiskPie - Analyze your disk usage with style</title>
+    <meta name="description" content="DiskPie is a modern, visual disk space analyzer for macOS. See where your storage is going at a glance.">
+    <link rel="stylesheet" href="assets/styles.css">
+</head>
+<body>
+
+    <header>
+        <div class="container">
+            <div style="display:flex; align-items:center;">
+                <h3 style="margin:0; color:var(--accent-color);">DiskPie</h3>
+            </div>
+            <nav>
+                <ul>
+                    <li><a href="index.html">Home</a></li>
+                    <li><a href="gallery.html">Gallery</a></li>
+                    <li><a href="manual.html">Manual</a></li>
+                    <li><a href="release-notes.html">Release Notes</a></li>
+                    <li><a href="about.html">About Me</a></li>
+                    <li><a href="#contact">Contact</a></li>
+                    <li><a href="https://adaminion.com" target="_blank" class="external-link">Developer: adaminion.com</a></li>
+                </ul>
+            </nav>
+            <div id="google_translate_element"></div>
+        </div>
+    </header>
+
+    <main>
+        <!-- Hero Section -->
+        <section class="hero animate-fade-in">
+            <h1>DiskPie</h1>
+            <p class="tagline">Analyze your disk usage with style.</p>
+            <p style="max-width: 600px; margin: 0 auto 2rem auto;">
+                DiskPie helps you visualize your disk space usage with interactive charts and efficient file scanning. Clean up your Mac and reclaim space effortlessly.
+            </p>
+            <a href="#" class="btn stagger-1">Download Now</a>
+            <a href="gallery.html" style="margin-left: 1rem;" class="btn stagger-2" style="background-color: #666;">View Gallery</a>
+        </section>
+
+        <!-- Features Teaser -->
+        <section class="container animate-fade-in stagger-3" style="display:flex; gap:2rem; flex-wrap: wrap;">
+            <div style="flex:1; min-width:250px;">
+                <h3>Fast Scanning</h3>
+                <p>Quickly scan local drives and folders to find large files taking up space.</p>
+            </div>
+            <div style="flex:1; min-width:250px;">
+                <h3>Visual Charts</h3>
+                <p>Interactive pie charts let you drill down into directories visually.</p>
+            </div>
+            <div style="flex:1; min-width:250px;">
+                <h3>Private & Secure</h3>
+                <p>Runs entirely offline on your Mac. No data is ever sent to the cloud.</p>
+            </div>
+        </section>
+
+        <!-- Contact Section -->
+        <section id="contact" class="animate-fade-in">
+            <h2 style="text-align:center; display:block; border:none;">Contact Us</h2>
+            <div class="contact-form">
+                <form action="mailto:info@adaminion.com" method="post" enctype="text/plain">
+                    <div class="form-group">
+                        <label for="name">Name</label>
+                        <input type="text" id="name" name="name" required placeholder="Your Name">
+                    </div>
+                    <div class="form-group">
+                        <label for="email">Email</label>
+                        <input type="email" id="email" name="email" required placeholder="your@email.com">
+                    </div>
+                    <div class="form-group">
+                        <label for="message">Message</label>
+                        <textarea id="message" name="message" required placeholder="How can we help?"></textarea>
+                    </div>
+                    <button type="submit" class="btn">Send Message</button>
+                    <p style="margin-top:1rem; font-size:0.9rem; color:#666;">
+                        Or email us directly at: <a href="mailto:info@adaminion.com">info@adaminion.com</a>
+                    </p>
+                </form>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <div class="container" style="flex-direction: column;">
+            <p>&copy; 2026 Adaminion App. All rights reserved.</p>
+            <p id="footer-counter" style="font-family: monospace; color: #aaa;">this site has been clicked ... times since 1/1/2020</p>
+        </div>
+    </footer>
+
+    <!-- Scripts -->
+    <script src="assets/main.js"></script>
+    <script type="text/javascript">
+        function googleTranslateElementInit() {
+          new google.translate.TranslateElement({pageLanguage: 'en', layout: google.translate.TranslateElement.InlineLayout.SIMPLE}, 'google_translate_element');
+        }
+    </script>
+    <script type="text/javascript" src="//translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
+</body>
+</html>

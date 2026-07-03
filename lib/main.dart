@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'app_info.dart';
 import 'home_screen.dart';
 
 import 'package:window_manager/window_manager.dart';
@@ -34,7 +35,7 @@ class DiskPieApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'DiskPie 0.3.1',
+      title: 'DiskPie $appVersion',
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.teal),
         useMaterial3: true,
